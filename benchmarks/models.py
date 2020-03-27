@@ -1,7 +1,6 @@
 import torch
 import torchvision
 from torchvision import datasets, models, transforms
-import imageio
 import numpy as np
 import time
 import sys
@@ -45,8 +44,8 @@ def run(args):
         if n in args.models:
           run_models.append((n, m))
     for name, model in run_models:
-        for batch_size in args.batch_sizes:
-            for is_train in [False, True]:
+        for batch_size in args.batch_size:
+            for is_train in [False] if args.eval else [False, True]:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     m = model()
@@ -73,7 +72,10 @@ def run(args):
                         inp_f = lambda N: tuple([_.cuda() for _ in inp_f_tmp(N)])
                     print(
                         json_bench(
-                            f"{name}_bs_{batch_size}_{'train' if is_train else 'eval'}",
+                            f"{name}_bs_{batch_size}_" +
+                              f"{'train' if is_train else 'eval'}_" +
+                              f"{'cuda' if args.cuda else 'cpu'}_" +
+                              f"{'te' if args.tensorexpr else 'default'}",
                             m,
                             lambda: inp_f(batch_size),
                             seconds=args.seconds,
@@ -89,6 +91,9 @@ if __name__ == "__main__":
     parser.add_argument("--cuda", help="Run models with CUDA", action="store_true")
     parser.add_argument(
         "--tensorexpr", help="Use tensorexpr fuser", action="store_true"
+    )
+    parser.add_argument(
+        "--eval", help="Only run forward pass", action="store_true"
     )
     parser.add_argument("--batch_size", metavar="SIZE", type=int, nargs='+',
                         help="Batch size or sizes to run", default=[1,32])
