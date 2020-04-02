@@ -94,15 +94,20 @@ function renderChart(selected, model_data) {
       td.appendChild(text);
     }
   }
+  let row_data = [];
   for (let name of Object.keys(model_data)) {
     let match = true;
     for (let key of Object.keys(unique)) {
       match &= (model_data[name][key] == selected[key]) || (selected[key] == "all");
     }
     if (match) {
-      addRow(model_data[name]);
+      row_data.push(model_data[name]);
     }
   }
+  row_data.sort(function(a,b) { return a.model.localeCompare(b.model); });
+	for (let row_datum of row_data) {
+		addRow(row_datum);
+	}
   document.getElementById('graph').appendChild(table);
 }
 
