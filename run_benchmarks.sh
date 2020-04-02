@@ -1,5 +1,9 @@
 set -e
 
+BRANCH="${BRANCH:-master}"
+CPU="${CPU:-95}"
+GPU="${GPU:-7}"
+
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 REPO=https://github.com/pytorch/pytorch.git
@@ -33,12 +37,10 @@ pushd $CLONE_DIR
 [ ! -d pytorch ] && git clone $REPO --recursive &>> $LOG_FILE
 [ ! -d vision ] && git clone $VISION_REPO --recursive &>> $LOG_FILE
 
-PR="${PR:-master}"
-
 pushd pytorch
 git checkout master
 git branch -D upstream &> /dev/null || true
-git fetch origin ${PR}:upstream
+git fetch origin ${BRANCH}:upstream
 git checkout upstream
 git submodule update --init --recursive
 git submodule foreach --recursive git clean -xfd
@@ -79,7 +81,7 @@ python setup.py install &>> $LOG_FILE
 popd
 popd
 pip install scipy
-CUDA_VISIBLE_DEVICES=7 numactl -C 37 python benchmarks/models.py --cuda --tensorexpr --seconds 10 >> $RESULT_FILE
-CUDA_VISIBLE_DEVICES=7 numactl -C 37 python benchmarks/models.py --cuda --seconds 10 >> $RESULT_FILE
-numactl -C 37 python benchmarks/models.py --tensorexpr >> $RESULT_FILE
-numactl -C 37 python benchmarks/models.py >> $RESULT_FILE
+CUDA_VISIBLE_DEVICES=${GPU} numactl -C ${CPU} python ${SCRIPT_DIR}/benchmarks/models.py --cuda --tensorexpr --seconds 10 >> $RESULT_FILE
+CUDA_VISIBLE_DEVICES=${GPU} numactl -C ${CPU} python ${SCRIPT_DIR}/benchmarks/models.py --cuda --seconds 10 >> $RESULT_FILE
+numactl -C ${CPU} python ${SCRIPT_DIR}/benchmarks/models.py --tensorexpr >> $RESULT_FILE
+numactl -C ${CPU} python ${SCRIPT_DIR}/benchmarks/models.py >> $RESULT_FILE
