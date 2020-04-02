@@ -1,0 +1,301 @@
+<html>
+<head>
+<style>
+html, body {
+  margin:0;
+  padding:0;
+  font-family: Liberation Sans, Arial, sans-serif;
+  background-color: #fffaf7;
+  text-align:center;
+}
+select {
+  font-family: Liberation Sans, Arial, sans-serif;
+  font-size: 1em;
+}
+#graph {
+  width:98%; 
+  margin:1%;
+  text-align:center;
+}
+table {
+  margin-left:auto; 
+  margin-right:auto; 
+  border-collapse: collapse;
+}
+th, td {
+  border: 1px solid black;
+  padding: 5px;
+  text-align: left;
+}
+</style>
+<script src="https://d3js.org/d3.v4.js"></script>
+<script>
+
+let unique = {};
+unique.model = {};
+unique.fuser = {};
+unique.batch_size = {};
+unique.device = {};
+unique.workload = {};
+
+function c(seed, opacity) {
+  function LCG(s) {
+    return (Math.imul(741103597, s) >>> 0) / 2 ** 32;
+  }
+  let r = LCG(seed) * 200;
+  let g = LCG(seed + 3247) * 200;
+  let b = LCG(seed + 1337) * 200;
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + opacity + ')';
+}
+
+function pp(us) {
+  if (us > 1000) {
+    if (us / 1000 > 1000) {
+      return "" + (us / 1e6).toFixed(2) + "s";
+    }
+    return "" + (us / 1e3).toFixed(2) + "ms";
+  }
+  return "" + us.toFixed(2) + "us";
+}
+
+function renderChart(selected, model_data) {
+  let table = document.createElement('table');
+  let thead = table.createTHead();
+  let row = thead.insertRow();
+  for (let key of Object.keys(unique)) {
+    let th = document.createElement("th");
+    let text = document.createTextNode(key);
+    th.appendChild(text);
+    row.appendChild(th);
+  }
+  for (let key of ["mean", "stddev", "min", "max"]) {
+    let th = document.createElement("th");
+    let text = document.createTextNode(key);
+    th.appendChild(text);
+    row.appendChild(th);
+  }
+  let index = 0;
+  function addRow(data) {
+    index++;
+    let d_row = table.insertRow();
+    for (let key of Object.keys(unique)) {
+      let td = d_row.insertCell();
+      if (key == "model") {
+        td.style.color = c(index, 1);
+      }
+      let text = document.createTextNode(data[key]);
+      td.appendChild(text);
+    }
+    for (let i = 0; i < 4; ++i) {
+      let td = d_row.insertCell();
+      let d = data.data;
+      let us = Number.parseFloat(d[d.length-1][i + 1]);
+      let text = document.createTextNode(pp(us));
+      td.appendChild(text);
+    }
+  }
+  for (let name of Object.keys(model_data)) {
+    let match = true;
+    for (let key of Object.keys(unique)) {
+      match &= (model_data[name][key] == selected[key]) || (selected[key] == "all");
+    }
+    if (match) {
+      addRow(model_data[name]);
+    }
+  }
+  document.getElementById('graph').appendChild(table);
+}
+
+function renderGraph(data) {
+  // set the dimensions and margins of the graph
+  var margin = {top: 30, right: 30, bottom: 60, left: 60},
+      width = document.body.clientWidth * 0.8 - margin.left - margin.right,
+      height = document.body.clientHeight * 0.8 - margin.top - margin.bottom;
+
+  // append the svg object to the body of the page
+  var svg = d3.select("#graph")
+    .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform",
+        "translate(" + margin.left + "," + margin.top + ")");
+  let min = data[0][1];
+  let max = data[0][1];
+  for (let d of data) {
+    if (d[3] < min) {
+      min = d[3];
+    }
+    if (d[4] > max) {
+      max = d[4];
+    }
+  }
+  let min_t = data[0][0];
+  let max_t = data[0][0];
+  for (let d of data) {
+    if (d[0] < min_t) {
+      min_t = d[0];
+    }
+    if (d[0] > max_t) {
+      max_t = d[0];
+    }
+  }
+  var sumstat = d3.nest() // nest function allows to group the calculation per level of a factor
+      .key(function(d) { return d[5];})
+      .entries(data);
+  var parseTime = d3.timeParse("%s");
+
+  // Add X axis --> it is a date format
+  var x = d3.scaleTime()
+    .domain([parseTime(min_t),
+             parseTime(max_t)])
+    .range([ 0, width ]);
+  svg.append("g")
+    .attr("transform", "translate(0," + height + ")")
+    .call(d3.axisBottom(x));
+
+  // Add Y axis
+  var y = d3.scaleLinear()
+    .domain([min, max])
+    .range([ height, 0 ]);
+  svg.append("g")
+    .call(d3.axisLeft(y));
+  var res = sumstat.map(function(d){ return d.key }) // list of group names
+    var color = d3.scaleOrdinal()
+    .domain(res)
+    .range(['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33','#a65628','#f781bf','#999999']);
+
+  //const colors = ['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33','#a65628','#f781bf','#999999'];
+  //const colors = ['rgba(255, 255, 255, )'
+  let index = 0;
+  for (let stat of sumstat) {
+  index++;
+    // Show confidence interval
+    svg
+      //.selectAll('.line')
+      //.enter()
+      //.data(sumstat)
+      .append("path")
+      .datum(stat.values)
+      .attr("fill", c(index, 0.2))//"#cce5df")
+      .attr("stroke", "none")
+      .attr("d", d3.area()
+          .x(function(d) { return x(parseTime(d[0])) })
+          .y0(function(d) { return y(d[3]) })
+          .y1(function(d) { return y(d[4]) })
+          )
+  }
+  index = 0;
+  for (let stat of sumstat) {
+  index++;
+
+      // Add the line
+      svg
+      //.selectAll('.line')
+      //.enter()
+      //.data(sumstat)
+      .append("path")
+      .datum(stat.values)
+      .attr("fill", "none")
+      .attr("stroke", c(index,1))
+      .attr("stroke-width", 1.5)
+      .attr("data-legend",function(d) { return d[5]})
+      .attr("d", d3.line()
+          .x(function(d) { return x(parseTime(d[0])) })
+          .y(function(d) { return y(d[1]) })
+          )
+  }
+}
+
+function render(selected, model_data) {
+  let data = [];
+  for (let name of Object.keys(model_data)) {
+    let match = true;
+    for (let key of Object.keys(unique)) {
+      match &= (model_data[name][key] == selected[key]) || (selected[key] == "all");
+    }
+    if (match) {
+      data = data.concat(model_data[name].data);
+    }
+  }
+  document.getElementById('graph').innerHTML = '';
+  if (data) {
+    renderChart(selected, model_data);
+    renderGraph(data);
+  } else {
+    document.getElementById('graph').innerHTML = 'Benchmark has no recorded data. Please try different parameters.';
+  }
+}
+
+function reqListener () {
+  let time_data = JSON.parse(this.responseText);
+  let models = {};
+  for (let time of time_data) {
+    let data_date = time[0];
+    let data = time[1];
+    for (let d of data) {
+      if (!(d.name in models)) {
+        models[d.name] = {};
+        function addUnique(key) {
+          if (!(d[key] in unique[key])) {
+            unique[key][d[key]] = 1;
+          }
+        }
+        for (let key of Object.keys(unique)) {
+          addUnique(key);
+          models[d.name][key] = d[key];
+        }
+        models[d.name].data = [];
+      }
+      models[d.name].data.push([data_date, d.mean, d.stddev, d.min, d.max, d.name, d.model]);
+    }
+  }
+  let selected = {};
+  const load_params = new URLSearchParams(location.search);
+  for (let key of Object.keys(unique)) {
+    if (load_params.get(key)) {
+      selected[key] = load_params.get(key);
+    } else {
+      if (key == "fuser") {
+        selected[key] = "all";
+      } else {
+        selected[key] = Object.keys(unique[key])[0];
+      }
+    }
+    let select = document.createElement("select");
+    select.addEventListener("change", function(e) {
+      selected[key] = e.target.value;
+      const params = new URLSearchParams(location.search);
+      params.set(key, e.target.value);
+      window.history.replaceState({}, '', `${location.pathname}?${params}`);
+      render(selected, models);
+    });
+    for (let m of Object.keys(unique[key]).concat(["all"])) {
+      let option = document.createElement("option");
+      option.text = m;
+      select.add(option);
+    }
+    select.name = key;
+    select.value = selected[key];
+    document.getElementById("select").appendChild(select);
+  }
+  //// this doesn't trigger a change event
+  //document.querySelector('select[name=fuser]').value = "all";
+  //selected.fuser = "all";
+
+  render(selected, models);
+}
+
+window.addEventListener('load', function() {
+    var oReq = new XMLHttpRequest();
+    oReq.addEventListener("load", reqListener);
+    oReq.open("GET", "/data");
+    oReq.send();
+});
+</script>
+</head>
+<body>
+<div id="select"></div>
+<div id="graph"></div>
+</body>
+</html>
