@@ -1,8 +1,8 @@
 # Benchmark Server
 
-This codebase contains an FB internal benchmark server.
+This codebase contains a benchmark server and benchmark scripts.
 
-Collect benchmarks with `./collect_benchmarks.sh`.
-This populates a database file, `benchmarks.db` that can be used
-with the python server in `bench_server`.
-Run the server in that folder with `python server.py`.
+Collect benchmarks with `./repeat_runs.sh`.
+This populates a folder, `nnc_bench_results` that can be used with
+with the python server in `server.py`.
+Run the server with `python server.py`.
